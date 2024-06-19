@@ -1,6 +1,7 @@
 # Email Delivery Microservice
 This microservice is designed to handle asynchronous email delivery using Java, Spring Boot, and various supporting technologies. It communicates via a Message Broker (Kafka), stores message details in ElasticSearch, and attempts to send emails via SMTP.
 It sends email when new team is created. How to create a team and other rest api details you can see in [repo](https://github.com/olenavit/spring-boot-rest)
+[Dockerfile](Dockerfile) creates a container with [image](https://hub.docker.com/r/olenavit/spring-team-player-rest-api) of this team-player-rest-api and start it on post 8081
 ## Technologies Used
 - Java
 - Spring Boot
