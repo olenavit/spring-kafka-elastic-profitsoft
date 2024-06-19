@@ -1,0 +1,106 @@
+services:
+  elasticsearch:
+    image: elasticsearch:8.6.1
+    container_name: elasticsearch
+    networks:
+      - mail-massage-network
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    volumes:
+      - ./data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: curl -s -f http://localhost:9200/_cat/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    mem_limit: 3g
+  kibana:
+    image: kibana:8.6.1
+    container_name: kibana
+    networks:
+      - mail-massage-network
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    container_name: zookeeper-kafka-profitsoft
+    networks:
+      - mail-massage-network
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:latest'
+    container_name: kafka-profitsoft
+    ports:
+      - '9092:9092'
+    networks:
+      - mail-massage-network
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+    depends_on:
+      - zookeeper
+      - elasticsearch
+  postgres:
+    image: 'postgres:latest'
+    hostname: db
+    environment:
+      - 'POSTGRES_DB=mydatabase'
+      - 'POSTGRES_PASSWORD=secret'
+      - 'POSTGRES_HOST_AUTH_METHOD=trust'
+      - 'POSTGRES_USER=myuser'
+    ports:
+      - "5432:5432"
+    networks:
+      - mail-massage-network
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  spring-rest-api:
+    image: olenavit/spring-team-player-rest-api:latest
+    container_name: spring-team-player-rest-api
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/mydatabase
+      - SPRING_DATASOURCE_USERNAME=myuser
+      - SPRING_DATASOURCE_PASSWORD=secret
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - mail-massage-network
+    depends_on:
+      - postgres
+
+  email-kafka:
+    build: .
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    networks:
+      - mail-massage-network
+    depends_on:
+      spring-rest-api:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+
+networks:
+  mail-massage-network:
+    external: true
